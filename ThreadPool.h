@@ -4,6 +4,7 @@
 #include <pthread.h>                    //线程库
 #include <semaphore.h>                  //信号库
 
+#include <exception>                    //异常处理
 #include <deque>
 
 template<typename T>
@@ -30,29 +31,32 @@ class ThreadPool{
 
 template<typename T>
 ThreadPool<T>::ThreadPool(int threadnum, int taskque) :
-thread_number(threadnum), max_taskque(taskque), isStop(0)
+thread_number(threadnum), max_taskque(taskque) 
 {
-    //if(threadnum <= 0 || taskque <= 0){
-    //    //异常处理
-    //}
+    if(threadnum <= 0 || taskque <= 0){
+        //异常处理
+        throw std::exception();
+    }
     threads = new pthread_t[thread_number];
     if(threads == NULL){
         //异常处理
+        throw std::exception();
     }
     for(int i = 0; i < thread_number; ++i){
-        std::cout << "Hello" << std::endl;
         int ret = pthread_create(threads + i, NULL, worker, this);
         if(ret != 0){
             //异常处理
+            throw std::exception();
         }
         if(pthread_detach(threads[i]) != 0){
             //异常处理
+            throw std::exception();
         }
     }
 
     sem_init(&que_state, 0, thread_number);                          //有多少空闲线程
     sem_init(&que_locker, 0, 1);                                     //互斥锁
-    //isStop = 0;                                                      //如果不初始化isStop，创建临时变量的线程池时，isStop是一个随机值
+    //isStop = 0;                                                      //如果不初始化isStop，创建临时变量的线程池时，isStop是一个随机值，放在前面在用栈的分配时会有bug, 目前使用new创建变量
 };
 
 template<typename T>
@@ -79,16 +83,13 @@ int ThreadPool<T>::append(T *task){
 template<typename T>
 void *ThreadPool<T>::worker(void *arg){
     ThreadPool *pool = (ThreadPool *)arg;
-    std::cout << "World" << std::endl;
     pool->run();
     return pool;
 }
 
 template<typename T>
 void ThreadPool<T>::run(){
-    std::cout << "isStop = " << isStop << std::endl;
     while(!isStop){
-        std::cout << "ok" << std::endl;
         sem_wait(&que_state);                    //检查队列里是否有任务
         sem_wait(&que_locker);                   //检查线程池现在是否正在使用
         if(task_que.empty()){                    //判断现在是否有任务，没有任务，从头继续等待
